@@ -1,1 +1,9 @@
 /tweeq/
+
+# --- Rust / Cargo ---
+# ビルド生成物（コンパイルされたバイナリや依存関係のキャッシュ）
+/target
+
+# Cargoがクラッシュした際などのテンポラリファイル
+**/*.rs.bk
+cargo-timing.html

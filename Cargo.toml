@@ -1,0 +1,8 @@
+[package]
+name = "nvim-tweeq-colorpalette"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29.1"
+anyhow = "1.0"
