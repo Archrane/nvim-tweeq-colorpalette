@@ -2,6 +2,7 @@ mod app;
 mod color;
 mod gesture;
 mod protocol;
+mod ui;
 
 use app::MyApp;
 use eframe::egui;
@@ -13,7 +14,8 @@ fn main() -> eframe::Result<()> {
     // 最小限のウィンドウを起動するための設定
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([240.0, 240.0])
+            .with_inner_size([280.0, 660.0])
+            .with_min_inner_size([280.0, 420.0])
             .with_decorations(true)
             .with_title("Tweeq Color Picker"),
         ..Default::default()

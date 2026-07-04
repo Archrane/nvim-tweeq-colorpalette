@@ -1,5 +1,6 @@
 use crate::color::Hsva;
 use crate::gesture::{apply_tweak_delta, detect_tweak_mode, TweakMode};
+use crate::ui::picker_popup::{self, PickerPopupState};
 use eframe::egui;
 
 /// アプリケーションの状態を表す状態機械
@@ -21,6 +22,9 @@ pub struct MyApp {
     pub initial_hsva_for_tweak: Hsva,
     pub accumulated_delta_for_tweak: egui::Vec2,
     pub last_mode: TweakMode,
+
+    // ポップアップ内フルUI(数値入力欄など)のローカル状態
+    pub popup_ui_state: PickerPopupState,
 }
 
 impl MyApp {
@@ -33,6 +37,7 @@ impl MyApp {
             initial_hsva_for_tweak: initial_hsva,
             accumulated_delta_for_tweak: egui::Vec2::ZERO,
             last_mode: TweakMode::Pad,
+            popup_ui_state: PickerPopupState::new(initial_hsva, alpha_enabled),
         }
     }
 }
@@ -54,6 +59,9 @@ impl eframe::App for MyApp {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
+            let mut popup_rect: Option<egui::Rect> = None;
+            let mut swatch_rect = egui::Rect::NOTHING;
+
             // 背景やボタンなどUIウィジェットを中央寄せで配置
             ui.vertical_centered(|ui| {
                 ui.heading("Tweeq Color Picker");
@@ -82,6 +90,7 @@ impl eframe::App for MyApp {
                     "Open Swatch (Idle)"
                 };
                 let swatch_response = ui.button(swatch_text);
+                swatch_rect = swatch_response.rect;
 
                 if swatch_response.clicked() {
                     if self.app_state == AppState::PopupOpen {
@@ -91,72 +100,87 @@ impl eframe::App for MyApp {
                     }
                 }
 
-                // ポップアッププレースホルダー
+                // ポップアップ内フルUI(2Dパッド/色相スライダー/アルファスライダー/数値入力/プリセット)
                 if self.app_state == AppState::PopupOpen {
                     ui.add_space(10.0);
-                    ui.group(|ui| {
-                        ui.label("--- Popup Placeholder ---");
-                        ui.label("• Drag anywhere in window to tweak");
-                        ui.label("• Click outside of buttons to confirm");
-                        ui.label("• Press ENTER to confirm");
-                        ui.label("• Press ESC to cancel");
+                    let frame_response = egui::Frame::group(ui.style()).show(ui, |ui| {
+                        picker_popup::show(
+                            ui,
+                            &mut self.current_hsva,
+                            &mut self.alpha_enabled,
+                            &mut self.popup_ui_state,
+                        );
                     });
+                    popup_rect = Some(frame_response.response.rect);
                 }
             });
 
-            // 画面全体のインタラクション検出 (余白部分のクリックや全体でのドラッグ)
-            // ボタンの上に重ねず、UI全体のイベントを受け取れるようallocate_rectを利用
-            let full_rect_response = ui.allocate_rect(ui.max_rect(), egui::Sense::click_and_drag());
+            if self.app_state == AppState::PopupOpen {
+                // ポップアップ及びスウォッチボタン以外の場所でのクリックを「外側クリック」とみなして確定する。
+                // ポップアップ内のウィジェット(パッド/スライダー/ボタン等)へのヒットテストを妨げないよう、
+                // 画面全体を覆うSenseウィジェットは使わず、生のポインター状態のみを参照する。
+                let clicked_outside = ui.input(|i| {
+                    i.pointer.primary_clicked()
+                        && i.pointer.interact_pos().map_or(false, |pos| {
+                            !swatch_rect.contains(pos)
+                                && popup_rect.map_or(true, |rect| !rect.contains(pos))
+                        })
+                });
 
-            // ドラッグ開始
-            if full_rect_response.drag_started() {
-                self.app_state = AppState::Dragging;
-                self.initial_hsva_for_tweak = self.current_hsva;
-                self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
-                self.last_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
-            }
+                if clicked_outside {
+                    let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
+                    println!("{}", hex);
+                    std::process::exit(0);
+                }
+            } else {
+                // PopupOpen以外の状態でのみ、画面全体でのドラッグ/クリックを検出する
+                // (スウォッチの直接ドラッグ操作、および背景クリックでのポップアップ開閉)
+                let full_rect_response =
+                    ui.allocate_rect(ui.max_rect(), egui::Sense::click_and_drag());
 
-            // ドラッグ中
-            if self.app_state == AppState::Dragging {
-                if full_rect_response.dragged() {
-                    // 1フレームのマウス移動量を取得して積算
-                    let delta = ui.input(|i| i.pointer.delta());
-                    self.accumulated_delta_for_tweak += delta;
+                // ドラッグ開始
+                if full_rect_response.drag_started() {
+                    self.app_state = AppState::Dragging;
+                    self.initial_hsva_for_tweak = self.current_hsva;
+                    self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
+                    self.last_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+                }
 
-                    // リアルタイムでキー押下状態から現在の TweakMode を判定
-                    let current_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+                // ドラッグ中
+                if self.app_state == AppState::Dragging {
+                    if full_rect_response.dragged() {
+                        // 1フレームのマウス移動量を取得して積算
+                        let delta = ui.input(|i| i.pointer.delta());
+                        self.accumulated_delta_for_tweak += delta;
 
-                    if current_mode != self.last_mode {
-                        // モード切り替えを検知したら、その瞬間の値を再キャプチャして基準値とする
-                        self.initial_hsva_for_tweak = self.current_hsva;
-                        self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
-                        self.last_mode = current_mode;
+                        // リアルタイムでキー押下状態から現在の TweakMode を判定
+                        let current_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+
+                        if current_mode != self.last_mode {
+                            // モード切り替えを検知したら、その瞬間の値を再キャプチャして基準値とする
+                            self.initial_hsva_for_tweak = self.current_hsva;
+                            self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
+                            self.last_mode = current_mode;
+                        }
+
+                        // 基準値 + 積算移動量から新しい色を適用
+                        self.current_hsva = apply_tweak_delta(
+                            self.initial_hsva_for_tweak,
+                            current_mode,
+                            self.accumulated_delta_for_tweak,
+                        );
                     }
 
-                    // 基準値 + 積算移動量から新しい色を適用
-                    self.current_hsva = apply_tweak_delta(
-                        self.initial_hsva_for_tweak,
-                        current_mode,
-                        self.accumulated_delta_for_tweak,
-                    );
+                    // ポインター解放 (Dragging からのリリース ➔ 確定終了)
+                    if full_rect_response.drag_stopped() {
+                        let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
+                        println!("{}", hex);
+                        std::process::exit(0);
+                    }
                 }
 
-                // ポインター解放 (Dragging からのリリース ➔ 確定終了)
-                if full_rect_response.drag_stopped() {
-                    let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
-                    println!("{}", hex);
-                    std::process::exit(0);
-                }
-            }
-
-            // 余白クリック (PopupOpen時の外側クリック ➔ 確定終了)
-            if full_rect_response.clicked() {
-                if self.app_state == AppState::PopupOpen {
-                    let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
-                    println!("{}", hex);
-                    std::process::exit(0);
-                } else if self.app_state == AppState::Idle {
-                    // Idle状態で背景をクリックしたときも PopupOpen のトグルが可能
+                // Idle状態での背景クリック ➔ ポップアップを開く
+                if full_rect_response.clicked() && self.app_state == AppState::Idle {
                     self.app_state = AppState::PopupOpen;
                 }
             }
