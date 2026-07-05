@@ -1,3 +1,4 @@
+pub mod overlay;
 pub mod pad;
 pub mod picker_popup;
 pub mod slider;

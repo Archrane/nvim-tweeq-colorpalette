@@ -22,6 +22,8 @@ pub struct MyApp {
     pub initial_hsva_for_tweak: Hsva,
     pub accumulated_delta_for_tweak: egui::Vec2,
     pub last_mode: TweakMode,
+    /// ドラッグ開始位置(画面座標)。Tweakオーバーレイの描画基準点として使う。
+    pub drag_origin: egui::Pos2,
 
     // ポップアップ内フルUI(数値入力欄など)のローカル状態
     pub popup_ui_state: PickerPopupState,
@@ -37,6 +39,7 @@ impl MyApp {
             initial_hsva_for_tweak: initial_hsva,
             accumulated_delta_for_tweak: egui::Vec2::ZERO,
             last_mode: TweakMode::Pad,
+            drag_origin: egui::Pos2::ZERO,
             popup_ui_state: PickerPopupState::new(initial_hsva, alpha_enabled),
         }
     }
@@ -144,6 +147,10 @@ impl eframe::App for MyApp {
                     self.initial_hsva_for_tweak = self.current_hsva;
                     self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
                     self.last_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+                    // ドラッグ開始位置を、Tweakオーバーレイの描画基準点として記録する
+                    self.drag_origin = ui
+                        .input(|i| i.pointer.press_origin())
+                        .unwrap_or_else(|| full_rect_response.rect.center());
                 }
 
                 // ドラッグ中
@@ -177,6 +184,15 @@ impl eframe::App for MyApp {
                         println!("{}", hex);
                         std::process::exit(0);
                     }
+
+                    // Tweakオーバーレイ: 画面全体を覆う視覚フィードバックを最前面に描画する
+                    crate::ui::overlay::show(
+                        ctx,
+                        self.drag_origin,
+                        self.current_hsva,
+                        self.last_mode,
+                        self.alpha_enabled,
+                    );
                 }
 
                 // Idle状態での背景クリック ➔ ポップアップを開く
