@@ -15,6 +15,7 @@ pub enum AppState {
 pub struct MyApp {
     pub current_hsva: Hsva,
     pub alpha_enabled: bool,
+    #[allow(dead_code)]
     pub initial_hex: String,
     pub app_state: AppState,
 
@@ -61,146 +62,134 @@ impl eframe::App for MyApp {
             std::process::exit(0);
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let mut popup_rect: Option<egui::Rect> = None;
-            let mut swatch_rect = egui::Rect::NOTHING;
+        let panel_frame = egui::Frame::central_panel(&ctx.style()).fill(egui::Color32::TRANSPARENT);
+        egui::CentralPanel::default()
+            .frame(panel_frame)
+            .show(ctx, |ui| {
+                let mut popup_rect: Option<egui::Rect> = None;
+                let mut swatch_rect = egui::Rect::NOTHING;
 
-            // 背景やボタンなどUIウィジェットを中央寄せで配置
-            ui.vertical_centered(|ui| {
-                ui.heading("Tweeq Color Picker");
-                ui.add_space(8.0);
+                // 背景やボタンなどUIウィジェットを中央寄せで配置
+                ui.vertical_centered(|ui| {
+                    ui.heading("Tweeq Color Picker");
+                    ui.add_space(8.0);
 
-                // 状態・モード情報の表示 (ロジック確認用)
-                ui.label(format!("State: {:?}", self.app_state));
-                ui.label(format!("Active Mode: {:?}", self.last_mode));
+                    // スウォッチボタン (クリックしてPopupOpenをトグル)
+                    let swatch_text = if self.app_state == AppState::PopupOpen {
+                        "Close Swatch (PopupOpen)"
+                    } else {
+                        "Open Swatch (Idle)"
+                    };
+                    let swatch_response = ui.button(swatch_text);
+                    swatch_rect = swatch_response.rect;
 
-                let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
-                ui.label(format!("Initial Hex: {}", self.initial_hex));
-                ui.label(format!("Current Hex: {}", hex));
-                ui.label(format!(
-                    "HSVA: ({:.2}, {:.2}, {:.2}, {:.2})",
-                    self.current_hsva.h,
-                    self.current_hsva.s,
-                    self.current_hsva.v,
-                    self.current_hsva.a
-                ));
-                ui.add_space(12.0);
-
-                // スウォッチボタン (クリックしてPopupOpenをトグル)
-                let swatch_text = if self.app_state == AppState::PopupOpen {
-                    "Close Swatch (PopupOpen)"
-                } else {
-                    "Open Swatch (Idle)"
-                };
-                let swatch_response = ui.button(swatch_text);
-                swatch_rect = swatch_response.rect;
-
-                if swatch_response.clicked() {
-                    if self.app_state == AppState::PopupOpen {
-                        self.app_state = AppState::Idle;
-                    } else if self.app_state == AppState::Idle {
-                        self.app_state = AppState::PopupOpen;
+                    if swatch_response.clicked() {
+                        if self.app_state == AppState::PopupOpen {
+                            self.app_state = AppState::Idle;
+                        } else if self.app_state == AppState::Idle {
+                            self.app_state = AppState::PopupOpen;
+                        }
                     }
-                }
 
-                // ポップアップ内フルUI(2Dパッド/色相スライダー/アルファスライダー/数値入力/プリセット)
-                if self.app_state == AppState::PopupOpen {
-                    ui.add_space(10.0);
-                    let frame_response = egui::Frame::group(ui.style()).show(ui, |ui| {
-                        picker_popup::show(
-                            ui,
-                            &mut self.current_hsva,
-                            &mut self.alpha_enabled,
-                            &mut self.popup_ui_state,
-                        );
-                    });
-                    popup_rect = Some(frame_response.response.rect);
-                }
-            });
-
-            if self.app_state == AppState::PopupOpen {
-                // ポップアップ及びスウォッチボタン以外の場所でのクリックを「外側クリック」とみなして確定する。
-                // ポップアップ内のウィジェット(パッド/スライダー/ボタン等)へのヒットテストを妨げないよう、
-                // 画面全体を覆うSenseウィジェットは使わず、生のポインター状態のみを参照する。
-                let clicked_outside = ui.input(|i| {
-                    i.pointer.primary_clicked()
-                        && i.pointer.interact_pos().map_or(false, |pos| {
-                            !swatch_rect.contains(pos)
-                                && popup_rect.map_or(true, |rect| !rect.contains(pos))
-                        })
+                    // ポップアップ内フルUI(2Dパッド/色相スライダー/アルファスライダー/数値入力/プリセット)
+                    if self.app_state == AppState::PopupOpen {
+                        ui.add_space(10.0);
+                        let frame_response = egui::Frame::group(ui.style()).show(ui, |ui| {
+                            picker_popup::show(
+                                ui,
+                                &mut self.current_hsva,
+                                &mut self.alpha_enabled,
+                                &mut self.popup_ui_state,
+                            );
+                        });
+                        popup_rect = Some(frame_response.response.rect);
+                    }
                 });
 
-                if clicked_outside {
-                    let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
-                    println!("{}", hex);
-                    std::process::exit(0);
-                }
-            } else {
-                // PopupOpen以外の状態でのみ、画面全体でのドラッグ/クリックを検出する
-                // (スウォッチの直接ドラッグ操作、および背景クリックでのポップアップ開閉)
-                let full_rect_response =
-                    ui.allocate_rect(ui.max_rect(), egui::Sense::click_and_drag());
+                if self.app_state == AppState::PopupOpen {
+                    // ポップアップ及びスウォッチボタン以外の場所でのクリックを「外側クリック」とみなして確定する。
+                    // ポップアップ内のウィジェット(パッド/スライダー/ボタン等)へのヒットテストを妨げないよう、
+                    // 画面全体を覆うSenseウィジェットは使わず、生のポインター状態のみを参照する。
+                    let clicked_outside = ui.input(|i| {
+                        i.pointer.primary_clicked()
+                            && i.pointer.interact_pos().map_or(false, |pos| {
+                                !swatch_rect.contains(pos)
+                                    && popup_rect.map_or(true, |rect| !rect.contains(pos))
+                            })
+                    });
 
-                // ドラッグ開始
-                if full_rect_response.drag_started() {
-                    self.app_state = AppState::Dragging;
-                    self.initial_hsva_for_tweak = self.current_hsva;
-                    self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
-                    self.last_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
-                    // ドラッグ開始位置を、Tweakオーバーレイの描画基準点として記録する
-                    self.drag_origin = ui
-                        .input(|i| i.pointer.press_origin())
-                        .unwrap_or_else(|| full_rect_response.rect.center());
-                }
-
-                // ドラッグ中
-                if self.app_state == AppState::Dragging {
-                    if full_rect_response.dragged() {
-                        // 1フレームのマウス移動量を取得して積算
-                        let delta = ui.input(|i| i.pointer.delta());
-                        self.accumulated_delta_for_tweak += delta;
-
-                        // リアルタイムでキー押下状態から現在の TweakMode を判定
-                        let current_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
-
-                        if current_mode != self.last_mode {
-                            // モード切り替えを検知したら、その瞬間の値を再キャプチャして基準値とする
-                            self.initial_hsva_for_tweak = self.current_hsva;
-                            self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
-                            self.last_mode = current_mode;
-                        }
-
-                        // 基準値 + 積算移動量から新しい色を適用
-                        self.current_hsva = apply_tweak_delta(
-                            self.initial_hsva_for_tweak,
-                            current_mode,
-                            self.accumulated_delta_for_tweak,
-                        );
-                    }
-
-                    // ポインター解放 (Dragging からのリリース ➔ 確定終了)
-                    if full_rect_response.drag_stopped() {
+                    if clicked_outside {
                         let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
                         println!("{}", hex);
                         std::process::exit(0);
                     }
+                } else {
+                    // PopupOpen以外の状態でのみ、画面全体でのドラッグ/クリックを検出する
+                    // (スウォッチの直接ドラッグ操作、および背景クリックでのポップアップ開閉)
+                    let full_rect_response =
+                        ui.allocate_rect(ui.max_rect(), egui::Sense::click_and_drag());
 
-                    // Tweakオーバーレイ: 画面全体を覆う視覚フィードバックを最前面に描画する
-                    crate::ui::overlay::show(
-                        ctx,
-                        self.drag_origin,
-                        self.current_hsva,
-                        self.last_mode,
-                        self.alpha_enabled,
-                    );
-                }
+                    // ドラッグ開始
+                    if full_rect_response.drag_started() {
+                        self.app_state = AppState::Dragging;
+                        self.initial_hsva_for_tweak = self.current_hsva;
+                        self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
+                        self.last_mode = ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+                        // ドラッグ開始位置を、Tweakオーバーレイの描画基準点として記録する
+                        self.drag_origin = ui
+                            .input(|i| i.pointer.press_origin())
+                            .unwrap_or_else(|| full_rect_response.rect.center());
+                    }
 
-                // Idle状態での背景クリック ➔ ポップアップを開く
-                if full_rect_response.clicked() && self.app_state == AppState::Idle {
-                    self.app_state = AppState::PopupOpen;
+                    // ドラッグ中
+                    if self.app_state == AppState::Dragging {
+                        if full_rect_response.dragged() {
+                            // 1フレームのマウス移動量を取得して積算
+                            let delta = ui.input(|i| i.pointer.delta());
+                            self.accumulated_delta_for_tweak += delta;
+
+                            // リアルタイムでキー押下状態から現在の TweakMode を判定
+                            let current_mode =
+                                ui.input(|i| detect_tweak_mode(i, self.alpha_enabled));
+
+                            if current_mode != self.last_mode {
+                                // モード切り替えを検知したら、その瞬間の値を再キャプチャして基準値とする
+                                self.initial_hsva_for_tweak = self.current_hsva;
+                                self.accumulated_delta_for_tweak = egui::Vec2::ZERO;
+                                self.last_mode = current_mode;
+                            }
+
+                            // 基準値 + 積算移動量から新しい色を適用
+                            self.current_hsva = apply_tweak_delta(
+                                self.initial_hsva_for_tweak,
+                                current_mode,
+                                self.accumulated_delta_for_tweak,
+                            );
+                        }
+
+                        // ポインター解放 (Dragging からのリリース ➔ 確定終了)
+                        if full_rect_response.drag_stopped() {
+                            let hex = crate::color::hsva2hex(self.current_hsva, self.alpha_enabled);
+                            println!("{}", hex);
+                            std::process::exit(0);
+                        }
+
+                        // Tweakオーバーレイ: 画面全体を覆う視覚フィードバックを最前面に描画する
+                        crate::ui::overlay::show(
+                            ctx,
+                            self.drag_origin,
+                            self.current_hsva,
+                            self.last_mode,
+                            self.alpha_enabled,
+                        );
+                    }
+
+                    // Idle状態での背景クリック ➔ ポップアップを開く
+                    if full_rect_response.clicked() && self.app_state == AppState::Idle {
+                        self.app_state = AppState::PopupOpen;
+                    }
                 }
-            }
-        });
+            });
 
         // 描画を強制更新して滑らかな追従を実現する
         ctx.request_repaint();

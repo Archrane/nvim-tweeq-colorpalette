@@ -16,7 +16,9 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([280.0, 660.0])
             .with_min_inner_size([280.0, 420.0])
-            .with_decorations(true)
+            .with_decorations(false)
+            .with_transparent(true)
+            .with_always_on_top()
             .with_title("Tweeq Color Picker"),
         ..Default::default()
     };
