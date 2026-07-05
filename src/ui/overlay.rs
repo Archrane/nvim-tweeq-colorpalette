@@ -1,4 +1,4 @@
-use super::{contrast_color, pad, picker_popup, slider, to_color32};
+use super::{contrast_color, fade, pad, picker_popup, slider, to_color32, wheel};
 use crate::color::{hsv2rgb, Hsva};
 use crate::gesture::TweakMode;
 use eframe::egui::{
@@ -16,12 +16,6 @@ const STACK_GAP: f32 = 10.0;
 const SWATCH_SIZE: f32 = 24.0;
 /// プレビュー円のスウォッチに対する拡大倍率(1.5節)。
 const PREVIEW_SCALE: f32 = 1.8;
-
-/// 色の不透明度を `opacity`(0.0..=1.0)倍して返す。
-fn fade(color: Color32, opacity: f32) -> Color32 {
-    let a = (color.a() as f32 * opacity).round().clamp(0.0, 255.0) as u8;
-    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
-}
 
 /// ドラッグ中(`AppState::Dragging`)の視覚フィードバック(Tweakオーバーレイ)を
 /// 画面全体を覆う最前面レイヤーに描画します。
@@ -49,13 +43,14 @@ pub fn show(ctx: &egui::Context, origin: Pos2, hsva: Hsva, mode: TweakMode, alph
     let width = picker_popup::POPUP_WIDTH;
     let slider_h = slider::SLIDER_HEIGHT;
 
-    // --- アイドル時(非アクティブ時)のスタックレイアウトを算出する ---
-    // origin の少し下に、パッド → 色相スライダー → アルファスライダー → RGBバー(3分割)の順で並べる。
+    // --- アイドル時(非アクティブ時)のスタッキレイアレイアウトを算出する ---
+    // origin の少し下に、パッド → 色相環(ホイール) → アルファスライダー → RGBバー(3分割)の順に並べる。
     let mut y = origin.y + 28.0;
     let pad_idle = Rect::from_min_size(pos2(origin.x - pad_size / 2.0, y), Vec2::splat(pad_size));
     y += pad_size + STACK_GAP;
-    let hue_idle = Rect::from_min_size(pos2(origin.x - width / 2.0, y), vec2(width, slider_h));
-    y += slider_h + STACK_GAP;
+    let wheel_diam = wheel::OUTER_RADIUS * 2.0;
+    let hue_idle_center = pos2(origin.x, y + wheel::OUTER_RADIUS);
+    y += wheel_diam + STACK_GAP;
     let alpha_idle = if alpha_enabled {
         let r = Rect::from_min_size(pos2(origin.x - width / 2.0, y), vec2(width, slider_h));
         y += slider_h + STACK_GAP;
@@ -91,15 +86,12 @@ pub fn show(ctx: &egui::Context, origin: Pos2, hsva: Hsva, mode: TweakMode, alph
     };
     draw_pad(&painter, pad_rect, hsva, opacity_for(pad_active));
 
-    let hue_rect = if hue_active {
-        Rect::from_min_size(
-            pos2(origin.x - hsva.h * width, origin.y - slider_h / 2.0),
-            vec2(width, slider_h),
-        )
+    let hue_center = if hue_active {
+        pos2(origin.x, origin.y + wheel::INDICATOR_RADIUS)
     } else {
-        hue_idle
+        hue_idle_center
     };
-    draw_hue_slider(&painter, hue_rect, hsva, opacity_for(hue_active));
+    wheel::draw_hue_wheel(&painter, hue_center, hsva, opacity_for(hue_active));
 
     if alpha_enabled {
         let alpha_rect = if alpha_active {
@@ -108,7 +100,8 @@ pub fn show(ctx: &egui::Context, origin: Pos2, hsva: Hsva, mode: TweakMode, alph
                 vec2(width, slider_h),
             )
         } else {
-            alpha_idle.unwrap_or(hue_idle)
+            // alpha_enabled が真の場合、alpha_idle は必ず Some になる。
+            alpha_idle.expect("alpha_idle is Some when alpha_enabled")
         };
         draw_alpha_slider(&painter, alpha_rect, hsva, opacity_for(alpha_active));
     }
@@ -204,38 +197,7 @@ fn draw_pad(painter: &Painter, rect: Rect, hsva: Hsva, opacity: f32) {
     );
 }
 
-/// 色相スライダーのグラフィックを描画する(`ui/slider.rs::hue_slider` の見た目を再現)。
-fn draw_hue_slider(painter: &Painter, rect: Rect, hsva: Hsva, opacity: f32) {
-    const SEGMENTS: u32 = 12;
-    let mut mesh = Mesh::default();
-    for i in 0..=SEGMENTS {
-        let t = i as f32 / SEGMENTS as f32;
-        let color = fade(to_color32(hsv2rgb(t, 1.0, 1.0)), opacity);
-        let x = rect.left() + (rect.right() - rect.left()) * t;
-        mesh.colored_vertex(pos2(x, rect.top()), color);
-        mesh.colored_vertex(pos2(x, rect.bottom()), color);
-        if i < SEGMENTS {
-            let idx = i * 2;
-            mesh.add_triangle(idx, idx + 1, idx + 2);
-            mesh.add_triangle(idx + 1, idx + 2, idx + 3);
-        }
-    }
-    painter.add(Shape::mesh(mesh));
-    painter.rect_stroke(rect, 2.0, Stroke::new(1.0, fade(Color32::GRAY, opacity)));
-
-    let x = rect.left() + hsva.h * rect.width();
-    let handle_pos = pos2(x, rect.center().y);
-    let handle_color = to_color32(hsv2rgb(hsva.h, 1.0, 1.0));
-    let radius = rect.height() * 0.5 - 1.0;
-    painter.circle_filled(handle_pos, radius, fade(handle_color, opacity));
-    painter.circle_stroke(
-        handle_pos,
-        radius,
-        Stroke::new(2.0, fade(contrast_color(handle_color), opacity)),
-    );
-}
-
-/// アルファスライダーのグラフィックを描画する(`ui/slider.rs::alpha_slider` の見た目を再現)。
+/// アルファスライダーのグラフィックを描画する(`ui/slider.rs::alpha_slider` の見た目を再現する)。
 fn draw_alpha_slider(painter: &Painter, rect: Rect, hsva: Hsva, opacity: f32) {
     let (r, g, b) = hsv2rgb(hsva.h, hsva.s, hsva.v);
     let base = to_color32((r, g, b));

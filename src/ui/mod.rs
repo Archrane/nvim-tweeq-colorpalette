@@ -2,6 +2,7 @@ pub mod overlay;
 pub mod pad;
 pub mod picker_popup;
 pub mod slider;
+pub mod wheel;
 
 use eframe::egui::Color32;
 
@@ -23,4 +24,11 @@ pub(crate) fn contrast_color(color: Color32) -> Color32 {
     } else {
         Color32::BLACK
     }
+}
+
+/// 色の不透明度を `opacity`(0.0..=1.0)倍して返します。
+/// Tweakオーバーレイで非アクティブなグラフィックを薄く表示する際に使用します。
+pub(crate) fn fade(color: Color32, opacity: f32) -> Color32 {
+    let a = (color.a() as f32 * opacity).round().clamp(0.0, 255.0) as u8;
+    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a)
 }

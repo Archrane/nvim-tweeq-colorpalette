@@ -1,4 +1,4 @@
-use super::{pad, slider};
+use super::{pad, slider, wheel};
 use crate::color::{hex2hsva, hsv2rgb, hsva2hex, rgb2hsv_with_fallback, Hsva};
 use eframe::egui::{self, Button, Color32, ComboBox, DragValue, Ui, Vec2};
 
@@ -71,8 +71,10 @@ pub fn show(ui: &mut Ui, hsva: &mut Hsva, alpha_enabled: &mut bool, state: &mut 
         pad::color_pad(ui, hsva);
     });
 
-    // 2. 色相スライダー
-    slider::hue_slider(ui, hsva);
+    // 2. 色相環(Hue Wheel)
+    ui.vertical_centered(|ui| {
+        wheel::hue_wheel(ui, hsva);
+    });
 
     // 3. アルファスライダー(alpha_enabled が true の時のみ表示) + 使用フラグ切替トグル
     ui.horizontal(|ui| {

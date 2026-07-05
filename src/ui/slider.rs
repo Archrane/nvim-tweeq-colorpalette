@@ -18,45 +18,6 @@ fn draw_handle(painter: &Painter, rect: Rect, t: f32, fill: Color32) {
     painter.circle_stroke(center, radius, Stroke::new(2.0, contrast_color(fill)));
 }
 
-/// 色相(Hue)スライダーを描画します。
-/// 赤→黄→緑→シアン→青→マゼンタ→赤と巡る虹色グラデーションを、
-/// 60°ごとに頂点を配置したメッシュの頂点カラー補間で滑らかに表現します。
-pub fn hue_slider(ui: &mut Ui, hsva: &mut Hsva) -> egui::Response {
-    let desired_size = Vec2::new(ui.available_width(), SLIDER_HEIGHT);
-    let (rect, response) = ui.allocate_exact_size(desired_size, Sense::click_and_drag());
-
-    if let Some(pos) = response.interact_pointer_pos() {
-        hsva.h = ((pos.x - rect.left()) / rect.width()).clamp(0.0, 1.0);
-    }
-
-    if ui.is_rect_visible(rect) {
-        // 6の倍数のセグメントにすることで、60°ごとの主要な色(赤/黄/緑/シアン/青/マゼンタ)を
-        // 必ず頂点として通過し、直線補間だけで滑らかな虹色グラデーションになる。
-        const SEGMENTS: u32 = 12;
-        let mut mesh = Mesh::default();
-        for i in 0..=SEGMENTS {
-            let t = i as f32 / SEGMENTS as f32;
-            let color = to_color32(hsv2rgb(t, 1.0, 1.0));
-            let x = lerp(rect.left(), rect.right(), t);
-            mesh.colored_vertex(pos2(x, rect.top()), color);
-            mesh.colored_vertex(pos2(x, rect.bottom()), color);
-            if i < SEGMENTS {
-                let idx = i * 2;
-                mesh.add_triangle(idx, idx + 1, idx + 2);
-                mesh.add_triangle(idx + 1, idx + 2, idx + 3);
-            }
-        }
-        ui.painter().add(Shape::mesh(mesh));
-        ui.painter()
-            .rect_stroke(rect, 2.0, ui.visuals().widgets.noninteractive.bg_stroke);
-
-        let handle_color = to_color32(hsv2rgb(hsva.h, 1.0, 1.0));
-        draw_handle(ui.painter(), rect, hsva.h, handle_color);
-    }
-
-    response
-}
-
 /// アルファ(不透明度)スライダーを描画します。
 /// `alpha_enabled` が真の時だけ呼び出す想定です。
 /// 背景にチェッカーボード模様を描き、その上に現在の色の透明(左)→不透明(右)グラデーションを重ねます。
