@@ -4,9 +4,9 @@ use eframe::egui::{vec2, Color32, Mesh, Painter, Pos2, Response, Sense, Shape, S
 use std::f32::consts::TAU;
 
 /// 色相環の外半径(px)。
-pub const OUTER_RADIUS: f32 = 40.0;
+pub const OUTER_RADIUS: f32 = 100.0;
 /// 色相環の内半径(px)。
-pub const INNER_RADIUS: f32 = 28.0;
+pub const INNER_RADIUS: f32 = 90.0;
 /// リングを分割する扇形の数(10度刻み)。
 const SEGMENTS: u32 = 36;
 /// 現在の色相を示すインジケータを描く半径位置(外周と内周の中間)。
