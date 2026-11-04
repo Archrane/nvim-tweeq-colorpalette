@@ -26,8 +26,8 @@
 
 ---
 
-## デモ動画
-![動画動画](demo/nvim-tweeq-colorpalette-demo.mp4)
+## デモ
+![デモ](demo/nvim-tweeq-colorpalette-demo.gif)
 
 ---
 
