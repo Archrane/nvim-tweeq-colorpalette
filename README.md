@@ -26,6 +26,11 @@
 
 ---
 
+## デモ動画
+![動画動画](demo/nvim-tweeq-colorpalette-demo.mp4)
+
+---
+
 ## 🚀 インストール & セットアップ (Installation)
 
 Neovimのパッケージマネージャー [lazy.nvim](https://github.com/folke/lazy.nvim) を使用した設定例です。
