@@ -112,6 +112,9 @@ sequenceDiagram
 
 ---
 
+## 謝辞
+本プラグインのカラーパレットのアルゴリズムは、Baku Hashimoto 氏が開発・公開されている [baku89/tweeq](https://github.com/baku89/tweeq)（MIT License）のロジックを移植・参考にしています。素晴らしいアルゴリズムを公開してくださっている原作者に感謝いたします。
+
 ## 📄 ライセンス
 
 [MIT License](./LICENSE)
