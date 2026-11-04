@@ -38,12 +38,12 @@ Neovimのパッケージマネージャー [lazy.nvim](https://github.com/folke/
 
 ```lua
 return {
-  "nvim-tweeq-colorpalette",
+  "Archrane/nvim-tweeq-colorpalette",
   -- ローカル開発用、または特定ディレクトリからのロード時
   -- dir = "~/github/nvim-tweeq-colorpalette", 
   
   -- プラグインの読み込みと同時にRustバイナリを自動ビルド
-  build = "cargo build --release --manifest-path rust/tweeq-colorpalette-gui/Cargo.toml",
+  build = "cargo build --release",
   
   keys = {
     -- 任意のキーマップで起動可能

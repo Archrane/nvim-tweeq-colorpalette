@@ -1,5 +1,10 @@
 /tweeq/
 
+# --- Tooling & Agent directories ---
+/.agents/
+/.gemini/
+/skills/
+
 # --- Rust / Cargo ---
 # ビルド生成物（コンパイルされたバイナリや依存関係のキャッシュ）
 /target
